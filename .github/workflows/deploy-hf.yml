@@ -21,11 +21,8 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # Use Authorization header for authentication
-          # This avoids putting the token in the URL, preventing "Port number" errors
-          git config --global http.extraHeader "Authorization: Bearer $HF_TOKEN"
-          
           echo "Cloning space: $HF_SPACE_NAME"
+          # Clone using public URL (no auth) to avoid "Port number" errors during clone
           git clone "https://huggingface.co/spaces/$HF_SPACE_NAME" space_repo
           cd space_repo
           
@@ -37,8 +34,9 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "🚀 Deploy from GitHub Actions: ${{ github.sha }}"
             
-            # Push using standard URL (header handles auth)
-            git push
+            # Push using inline authenticated URL
+            # We use 'main' branch explicitly
+            git push "https://oauth2:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_NAME" main
           else
             echo "No changes to deploy"
           fi
