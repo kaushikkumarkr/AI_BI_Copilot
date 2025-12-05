@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 import json
 import os
+import requests
 from io import BytesIO
 
 # Set page config
@@ -23,23 +24,72 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+HUGGINGFACE_API_KEY = os.getenv("HUGGINGFACE_API_KEY", "")
+
+def call_groq(prompt: str):
+    if not GROQ_API_KEY:
+        raise Exception("No Groq Key")
+    from groq import Groq
+    client = Groq(api_key=GROQ_API_KEY)
+    response = client.chat.completions.create(
+        model="llama-3.1-8b-instant",
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=2000
+    )
+    return response.choices[0].message.content
+
+def call_openrouter(prompt: str):
+    if not OPENROUTER_API_KEY:
+        raise Exception("No OpenRouter Key")
+    
+    headers = {
+        "Authorization": f"Bearer {OPENROUTER_API_KEY}",
+        "Content-Type": "application/json"
+    }
+    data = {
+        "model": "meta-llama/llama-3.1-70b-instruct:free",
+        "messages": [{"role": "user", "content": prompt}]
+    }
+    response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=data)
+    if response.status_code == 200:
+        return response.json()['choices'][0]['message']['content']
+    raise Exception(f"OpenRouter Error: {response.text}")
+
+def call_huggingface(prompt: str):
+    if not HUGGINGFACE_API_KEY:
+        raise Exception("No HuggingFace Key")
+    
+    API_URL = "https://api-inference.huggingface.co/models/google/flan-t5-large"
+    headers = {"Authorization": f"Bearer {HUGGINGFACE_API_KEY}"}
+    response = requests.post(API_URL, headers=headers, json={"inputs": prompt})
+    if response.status_code == 200:
+        return response.json()[0]['generated_text']
+    raise Exception(f"HuggingFace Error: {response.text}")
 
 def get_llm_response(prompt: str) -> str:
-    """Get response from Groq LLM."""
-    if not GROQ_API_KEY:
-        return "⚠️ No API key configured. Add GROQ_API_KEY to Space secrets."
+    """Get response with fallback strategy: Groq -> OpenRouter -> HuggingFace."""
+    errors = []
     
+    # 1. Try Groq
     try:
-        from groq import Groq
-        client = Groq(api_key=GROQ_API_KEY)
-        response = client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": prompt}],
-            max_tokens=2000
-        )
-        return response.choices[0].message.content
+        return call_groq(prompt)
     except Exception as e:
-        return f"LLM Error: {str(e)}"
+        errors.append(f"Groq: {str(e)}")
+    
+    # 2. Try OpenRouter
+    try:
+        return call_openrouter(prompt)
+    except Exception as e:
+        errors.append(f"OpenRouter: {str(e)}")
+        
+    # 3. Try HuggingFace
+    try:
+        return call_huggingface(prompt)
+    except Exception as e:
+        errors.append(f"HuggingFace: {str(e)}")
+    
+    return f"⚠️ All AI providers failed.\nErrors:\n" + "\n".join(errors)
 
 # ============== Agent Functions ==============
 
