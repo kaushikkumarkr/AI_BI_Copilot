@@ -21,22 +21,20 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # Clone the HF space using oauth2 and token
-          # We use a separate variable for the URL to avoid masking issues in logs if possible, 
-          # but for git clone we need to embed it.
+          # Use credential helper to handle auth securely and avoid URL parsing issues
+          git config --global credential.helper store
+          echo "https://oauth2:$HF_TOKEN@huggingface.co" > ~/.git-credentials
           
+          # Clone the HF space using standard URL
           echo "Cloning space: $HF_SPACE_NAME"
-          
-          git clone "https://oauth2:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_NAME" space_repo
+          git clone "https://huggingface.co/spaces/$HF_SPACE_NAME" space_repo
           cd space_repo
           
           # Copy files from our repo's huggingface_space folder to the space repo
-          # We use rsync to sync, excluding .git
           rsync -av --delete --exclude='.git' ../huggingface_space/ .
           
           # Commit and push
           git add .
-          # Only commit if there are changes
           if ! git diff --staged --quiet; then
             git commit -m "🚀 Deploy from GitHub Actions: ${{ github.sha }}"
             git push
