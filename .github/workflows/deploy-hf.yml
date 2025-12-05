@@ -25,7 +25,10 @@ jobs:
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
         run: |
-          # Use Python to login, avoiding PATH issues with CLI
+          # Configure git credential helper FIRST
+          git config --global credential.helper store
+          
+          # Use Python to login and save credentials
           python -c "from huggingface_hub import login; import os; login(token=os.environ['HF_TOKEN'], add_to_git_credential=True)"
 
       - name: Push to hub
