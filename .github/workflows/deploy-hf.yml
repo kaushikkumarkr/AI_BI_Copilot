@@ -1,0 +1,21 @@
+name: Deploy to HuggingFace Spaces
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'huggingface_space/**'
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to HuggingFace Spaces
+        uses: JacobLinCool/huggingface-spaces-action@v0.1.0
+        with:
+          space: ${{ secrets.HF_SPACE_NAME }}  # e.g., "username/AI-BI-Copilot"
+          token: ${{ secrets.HF_TOKEN }}
+          directory: huggingface_space
