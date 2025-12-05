@@ -21,22 +21,27 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # Use credential helper to handle auth securely and avoid URL parsing issues
+          # Clone using public URL (or with token if private, but let's try standard clone first)
+          # We use credential helper for the clone part just in case
           git config --global credential.helper store
           echo "https://oauth2:$HF_TOKEN@huggingface.co" > ~/.git-credentials
           
-          # Clone the HF space using standard URL
           echo "Cloning space: $HF_SPACE_NAME"
           git clone "https://huggingface.co/spaces/$HF_SPACE_NAME" space_repo
           cd space_repo
           
-          # Copy files from our repo's huggingface_space folder to the space repo
+          # Copy files
           rsync -av --delete --exclude='.git' ../huggingface_space/ .
           
-          # Commit and push
+          # Commit
           git add .
           if ! git diff --staged --quiet; then
             git commit -m "🚀 Deploy from GitHub Actions: ${{ github.sha }}"
+            
+            # FORCE the token into the remote URL for pushing
+            # This bypasses the credential helper issues for push
+            git remote set-url origin "https://oauth2:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_NAME"
+            
             git push
           else
             echo "No changes to deploy"
