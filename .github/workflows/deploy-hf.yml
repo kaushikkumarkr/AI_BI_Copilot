@@ -3,8 +3,6 @@ name: Deploy to HuggingFace Spaces
 on:
   push:
     branches: [main]
-    paths:
-      - 'huggingface_space/**'
 
 jobs:
   deploy:

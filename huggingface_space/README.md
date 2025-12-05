@@ -1,5 +1,5 @@
 ---
-title: AI Business Intelligence Copilot
+title: AI Business Intelligence Copilot 🚀
 emoji: 📊
 colorFrom: blue
 colorTo: purple
