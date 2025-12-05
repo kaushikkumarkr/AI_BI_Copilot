@@ -1,0 +1,18 @@
+version: '3.8'
+
+services:
+  ai-bi-copilot:
+    build: .
+    ports:
+      - "8000:8000" # Backend
+      - "8501:8501" # Frontend
+    env_file:
+      - .env
+    volumes:
+      - ./uploads:/app/uploads
+      - ./backend/report:/app/backend/report
+      - ./backend/visualizations:/app/backend/visualizations
+      - ./backend/forecasting:/app/backend/forecasting
+    restart: always
+
+# end file
