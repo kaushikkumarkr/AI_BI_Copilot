@@ -13,6 +13,14 @@ jobs:
           fetch-depth: 0
           lfs: true
 
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install HuggingFace Hub
+        run: pip install huggingface_hub
+
       - name: Push to hub
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -21,8 +29,12 @@ jobs:
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
+          # Use official CLI to login and setup git credentials
+          # This handles all the complex auth logic for us
+          huggingface-cli login --token "$HF_TOKEN" --add-to-git-credential
+          
           echo "Cloning space: $HF_SPACE_NAME"
-          # Clone public
+          # Clone using standard URL (credential helper handles auth)
           git clone "https://huggingface.co/spaces/$HF_SPACE_NAME" space_repo
           cd space_repo
           
@@ -34,9 +46,8 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "🚀 Deploy from GitHub Actions: ${{ github.sha }}"
             
-            # Push using Token as Username (no password)
-            # This avoids the colon separator issue
-            git push "https://$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_NAME" main
+            # Push using standard URL (credential helper handles auth)
+            git push
           else
             echo "No changes to deploy"
           fi
