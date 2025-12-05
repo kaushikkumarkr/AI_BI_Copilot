@@ -6,16 +6,34 @@ colorTo: purple
 sdk: streamlit
 sdk_version: 1.29.0
 app_file: app.py
-pinned: false
+pinned: true
 license: mit
 ---
 
-# AI Business Intelligence Copilot
+# 🤖 AI Business Intelligence Copilot
 
-Upload your data and let AI agents analyze it automatically!
+**100% FREE** • No backend required • Upload and analyze instantly!
 
 ## Features
-- 📊 Auto-generated visualizations
-- 📈 Time-series forecasting
-- 💬 Natural language queries
-- 📑 PDF report generation
+
+- 📂 **Upload CSV/Excel** - Any dataset works
+- 📊 **Auto Visualizations** - Heatmaps, distributions, bar charts
+- 🔍 **SQL Generation** - Ask in English, get SQL
+- 🧠 **Semantic Q&A** - Get AI-powered insights
+- 📈 **Statistics** - Correlations, descriptive stats
+
+## How to Use
+
+1. Upload your CSV or Excel file
+2. Click "Run AI Analysis"
+3. Explore visualizations, ask questions, view stats
+
+## Tech Stack
+
+- Streamlit (Frontend)
+- Groq LLM (AI responses)
+- Pandas, Seaborn, Matplotlib (Analysis)
+
+## Setup Secrets
+
+Add `GROQ_API_KEY` in Space settings → Secrets

@@ -1,16 +1,149 @@
-# HuggingFace Space Streamlit App
+# AI Business Intelligence Copilot - Unified HuggingFace Spaces App
+# 100% FREE - No separate backend needed!
+
 import streamlit as st
-import requests
 import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import json
+import os
+from io import BytesIO
 
-# ⚠️ UPDATE THIS TO YOUR RENDER BACKEND URL
-API_URL = "https://ai-bi-copilot-api.onrender.com"  # Replace with your actual Render URL
-
+# Set page config
 st.set_page_config(
     page_title="AI Business Intelligence Copilot",
     page_icon="📊",
     layout="wide"
 )
+
+# ============== LLM Configuration ==============
+import os
+from dotenv import load_dotenv
+load_dotenv()
+
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
+
+def get_llm_response(prompt: str) -> str:
+    """Get response from Groq LLM."""
+    if not GROQ_API_KEY:
+        return "⚠️ No API key configured. Add GROQ_API_KEY to Space secrets."
+    
+    try:
+        from groq import Groq
+        client = Groq(api_key=GROQ_API_KEY)
+        response = client.chat.completions.create(
+            model="llama-3.1-8b-instant",
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=2000
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"LLM Error: {str(e)}"
+
+# ============== Agent Functions ==============
+
+def analyze_data_quality(df: pd.DataFrame) -> dict:
+    """Data Quality Agent - Check for issues."""
+    missing = df.isnull().sum()
+    duplicates = df.duplicated().sum()
+    
+    quality_score = 100
+    if missing.sum() > 0:
+        quality_score -= min(20, (missing.sum() / len(df)) * 100)
+    if duplicates > 0:
+        quality_score -= min(20, (duplicates / len(df)) * 100)
+    
+    return {
+        "quality_score": round(quality_score, 2),
+        "missing_values": missing[missing > 0].to_dict(),
+        "duplicates": int(duplicates),
+        "total_rows": len(df),
+        "total_columns": len(df.columns)
+    }
+
+def get_statistics(df: pd.DataFrame) -> dict:
+    """Statistical Agent - Compute stats."""
+    numeric_stats = df.describe().to_dict()
+    
+    # Correlations
+    numeric_df = df.select_dtypes(include=['number'])
+    correlations = []
+    if len(numeric_df.columns) > 1:
+        corr_matrix = numeric_df.corr()
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i):
+                val = corr_matrix.iloc[i, j]
+                if abs(val) > 0.5:
+                    correlations.append({
+                        "col1": corr_matrix.columns[i],
+                        "col2": corr_matrix.columns[j],
+                        "value": round(val, 3)
+                    })
+    
+    return {
+        "numeric_stats": numeric_stats,
+        "correlations": correlations
+    }
+
+def create_visualizations(df: pd.DataFrame) -> list:
+    """Visualization Agent - Generate charts."""
+    charts = []
+    
+    # Correlation heatmap
+    numeric_df = df.select_dtypes(include=['number'])
+    if len(numeric_df.columns) > 1:
+        fig, ax = plt.subplots(figsize=(10, 8))
+        sns.heatmap(numeric_df.corr(), annot=True, cmap='coolwarm', fmt=".2f", ax=ax)
+        ax.set_title("Correlation Matrix")
+        charts.append(("Correlation Matrix", fig))
+    
+    # Distribution plots for numeric columns
+    for col in numeric_df.columns[:3]:
+        fig, ax = plt.subplots(figsize=(8, 6))
+        sns.histplot(df[col], kde=True, ax=ax)
+        ax.set_title(f"Distribution of {col}")
+        charts.append((f"Distribution: {col}", fig))
+    
+    # Categorical bar charts
+    cat_cols = df.select_dtypes(include=['object', 'category']).columns[:2]
+    for col in cat_cols:
+        if df[col].nunique() <= 15:
+            fig, ax = plt.subplots(figsize=(10, 6))
+            df[col].value_counts().plot(kind='bar', ax=ax)
+            ax.set_title(f"Count of {col}")
+            ax.set_xlabel(col)
+            charts.append((f"Bar Chart: {col}", fig))
+    
+    return charts
+
+def generate_sql(query: str, columns: list) -> str:
+    """SQL Agent - Generate SQL from natural language."""
+    prompt = f"""Convert this natural language query to SQL.
+Table name: dataset
+Columns: {columns}
+
+Query: "{query}"
+
+Return ONLY the SQL query, no explanation."""
+    
+    return get_llm_response(prompt)
+
+def semantic_query(query: str, df_summary: str) -> str:
+    """Semantic Query Agent - Answer questions about data."""
+    prompt = f"""You are a Business Intelligence Analyst.
+Answer this question based on the data summary below.
+
+Question: "{query}"
+
+Data Summary:
+{df_summary}
+
+Provide a clear, data-driven answer."""
+    
+    return get_llm_response(prompt)
+
+# ============== UI Components ==============
 
 # Custom CSS
 st.markdown("""
@@ -24,145 +157,155 @@ st.markdown("""
         text-align: center;
         padding: 1rem;
     }
-    .feature-card {
-        background: linear-gradient(145deg, #1e1e2e, #2d2d44);
-        border-radius: 15px;
-        padding: 1.5rem;
-        margin: 0.5rem;
-        border: 1px solid #3d3d5c;
+    .metric-card {
+        background: linear-gradient(145deg, #f0f2f6, #ffffff);
+        border-radius: 10px;
+        padding: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
 </style>
 """, unsafe_allow_html=True)
 
 # Header
 st.markdown('<h1 class="main-header">🤖 AI Business Intelligence Copilot</h1>', unsafe_allow_html=True)
+st.markdown("**100% Free** • Upload CSV/Excel → AI analyzes → Get insights, charts & answers")
 st.markdown("---")
 
 # Sidebar
-st.sidebar.title("Navigation")
-page = st.sidebar.radio("", ["🏠 Home", "📂 Upload Dataset", "💬 Query Data", "📑 Reports"])
+st.sidebar.title("🧭 Navigation")
+page = st.sidebar.radio("", ["📂 Upload & Analyze", "📊 Visualizations", "💬 Ask Questions", "📈 Statistics"])
 
-if page == "🏠 Home":
-    st.markdown("### Welcome to the AI BI Copilot!")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown("""
-        #### 📊 Auto Analysis
-        Upload any CSV/Excel and watch AI agents:
-        - Analyze data quality
-        - Generate statistics
-        - Create visualizations
-        """)
-    
-    with col2:
-        st.markdown("""
-        #### 📈 Forecasting
-        Time-series detection with:
-        - Prophet forecasting
-        - Trend decomposition
-        - Error metrics
-        """)
-    
-    with col3:
-        st.markdown("""
-        #### 💬 Ask Questions
-        Natural language queries:
-        - SQL generation
-        - Semantic answers
-        - Data insights
-        """)
+# Session state
+if "df" not in st.session_state:
+    st.session_state.df = None
+if "quality" not in st.session_state:
+    st.session_state.quality = None
+if "stats" not in st.session_state:
+    st.session_state.stats = None
+if "charts" not in st.session_state:
+    st.session_state.charts = None
 
-elif page == "📂 Upload Dataset":
+# ============== Pages ==============
+
+if page == "📂 Upload & Analyze":
     st.title("📂 Upload Your Dataset")
     
-    uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xlsx"])
+    uploaded_file = st.file_uploader("Choose a CSV or Excel file", type=["csv", "xlsx", "xls"])
     
     if uploaded_file:
-        # Preview
         try:
             if uploaded_file.name.endswith('.csv'):
                 df = pd.read_csv(uploaded_file)
             else:
                 df = pd.read_excel(uploaded_file)
             
-            st.success(f"✅ Loaded {len(df)} rows, {len(df.columns)} columns")
-            st.dataframe(df.head(10))
+            st.session_state.df = df
+            st.success(f"✅ Loaded **{len(df)}** rows, **{len(df.columns)}** columns")
             
-            if st.button("🚀 Start AI Analysis", type="primary"):
-                with st.spinner("Uploading and starting agents..."):
-                    uploaded_file.seek(0)
-                    files = {"file": uploaded_file}
-                    try:
-                        res = requests.post(f"{API_URL}/analyze_dataset", files=files, timeout=30)
-                        if res.status_code == 200:
-                            task_id = res.json()["task_id"]
-                            st.session_state["task_id"] = task_id
-                            st.success(f"🎉 Analysis started! Task ID: `{task_id}`")
-                            st.info("The AI agents are now processing your data. This may take a few minutes.")
-                        else:
-                            st.error(f"Upload failed: {res.text}")
-                    except requests.exceptions.ConnectionError:
-                        st.error("⚠️ Backend not reachable. Make sure the API is deployed.")
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+            # Preview
+            st.subheader("Data Preview")
+            st.dataframe(df.head(10), use_container_width=True)
+            
+            # Analyze button
+            if st.button("🚀 Run AI Analysis", type="primary"):
+                with st.spinner("🤖 Agents analyzing your data..."):
+                    # Quality check
+                    st.session_state.quality = analyze_data_quality(df)
+                    
+                    # Statistics
+                    st.session_state.stats = get_statistics(df)
+                    
+                    # Visualizations
+                    st.session_state.charts = create_visualizations(df)
+                    
+                st.success("✅ Analysis complete! Check other tabs for results.")
+                st.balloons()
+            
+            # Show quality results if available
+            if st.session_state.quality:
+                st.subheader("📋 Data Quality Report")
+                q = st.session_state.quality
+                
+                col1, col2, col3, col4 = st.columns(4)
+                col1.metric("Quality Score", f"{q['quality_score']}%")
+                col2.metric("Total Rows", q['total_rows'])
+                col3.metric("Total Columns", q['total_columns'])
+                col4.metric("Duplicates", q['duplicates'])
+                
+                if q['missing_values']:
+                    st.warning(f"⚠️ Missing values found: {q['missing_values']}")
+                    
         except Exception as e:
-            st.error(f"Could not read file: {e}")
+            st.error(f"Error reading file: {e}")
 
-elif page == "💬 Query Data":
+elif page == "📊 Visualizations":
+    st.title("📊 Generated Visualizations")
+    
+    if st.session_state.charts:
+        for title, fig in st.session_state.charts:
+            st.subheader(title)
+            st.pyplot(fig)
+            plt.close(fig)
+    else:
+        st.info("📂 Please upload a dataset and run analysis first.")
+
+elif page == "💬 Ask Questions":
     st.title("💬 Ask Your Data")
     
-    task_id = st.session_state.get("task_id", "")
-    task_id_input = st.text_input("Task ID (from upload)", value=task_id)
-    
-    query = st.text_area("Your Question", placeholder="e.g., What is the total sales by region?")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        if st.button("🔍 SQL Query"):
-            if query and task_id_input:
-                with st.spinner("Generating SQL..."):
-                    try:
-                        res = requests.post(
-                            f"{API_URL}/sql_query",
-                            json={"query": query, "dataset_id": task_id_input},
-                            timeout=60
-                        )
-                        data = res.json()
-                        st.code(data.get("sql", ""), language="sql")
-                        if "result" in data:
-                            st.dataframe(pd.DataFrame(data["result"]))
-                    except Exception as e:
-                        st.error(f"Error: {e}")
-    
-    with col2:
-        if st.button("🧠 Semantic Query"):
-            if query and task_id_input:
-                with st.spinner("Thinking..."):
-                    try:
-                        res = requests.post(
-                            f"{API_URL}/semantic_query",
-                            json={"query": query, "context_id": task_id_input},
-                            timeout=60
-                        )
-                        data = res.json()
-                        st.markdown(data.get("answer", "No answer"))
-                    except Exception as e:
-                        st.error(f"Error: {e}")
+    if st.session_state.df is not None:
+        df = st.session_state.df
+        
+        query = st.text_area("Your Question", placeholder="e.g., What is the average sales by region?")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔍 Generate SQL"):
+                if query:
+                    with st.spinner("Generating SQL..."):
+                        sql = generate_sql(query, list(df.columns))
+                        st.code(sql, language="sql")
+                        
+                        # Try to execute if simple
+                        try:
+                            import sqlite3
+                            conn = sqlite3.connect(":memory:")
+                            df.to_sql("dataset", conn, index=False)
+                            result = pd.read_sql_query(sql, conn)
+                            st.dataframe(result)
+                            conn.close()
+                        except:
+                            st.info("SQL generated. Manual execution may be needed.")
+        
+        with col2:
+            if st.button("🧠 Semantic Answer"):
+                if query:
+                    with st.spinner("Thinking..."):
+                        summary = df.describe().to_string() + "\n\nSample:\n" + df.head(5).to_string()
+                        answer = semantic_query(query, summary)
+                        st.markdown(answer)
+    else:
+        st.info("📂 Please upload a dataset first.")
 
-elif page == "📑 Reports":
-    st.title("📑 Generated Reports")
+elif page == "📈 Statistics":
+    st.title("📈 Statistical Analysis")
     
-    task_id = st.session_state.get("task_id", "")
-    task_id_input = st.text_input("Task ID", value=task_id)
-    
-    if task_id_input:
-        st.markdown(f"### Report for Task: `{task_id_input}`")
-        st.markdown(f"[📥 Download PDF Report]({API_URL}/report/{task_id_input})")
-        st.markdown(f"[📊 View Charts]({API_URL}/charts/{task_id_input})")
+    if st.session_state.stats:
+        stats = st.session_state.stats
+        
+        # Correlations
+        if stats['correlations']:
+            st.subheader("🔗 Strong Correlations Found")
+            for corr in stats['correlations']:
+                st.write(f"• **{corr['col1']}** ↔ **{corr['col2']}**: {corr['value']}")
+        
+        # Numeric stats
+        st.subheader("📊 Descriptive Statistics")
+        if st.session_state.df is not None:
+            st.dataframe(st.session_state.df.describe(), use_container_width=True)
+    else:
+        st.info("📂 Please upload a dataset and run analysis first.")
 
 # Footer
 st.markdown("---")
-st.markdown("Built with ❤️ using LangGraph, FastAPI, and Streamlit")
+st.markdown("Built with ❤️ using LangGraph concepts • 100% Free on HuggingFace Spaces")
