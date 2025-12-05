@@ -21,20 +21,22 @@ jobs:
       - name: Install HuggingFace Hub
         run: pip install huggingface_hub
 
-      - name: Push to hub
+      - name: Login to HuggingFace
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
+        run: |
+          # Use Python to login, avoiding PATH issues with CLI
+          python -c "from huggingface_hub import login; import os; login(token=os.environ['HF_TOKEN'], add_to_git_credential=True)"
+
+      - name: Push to hub
+        env:
           HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
         run: |
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
           git config --global user.name "github-actions[bot]"
           
-          # Use official CLI to login and setup git credentials
-          # This handles all the complex auth logic for us
-          huggingface-cli login --token "$HF_TOKEN" --add-to-git-credential
-          
           echo "Cloning space: $HF_SPACE_NAME"
-          # Clone using standard URL (credential helper handles auth)
+          # Clone using standard URL (credential helper handles auth now)
           git clone "https://huggingface.co/spaces/$HF_SPACE_NAME" space_repo
           cd space_repo
           
@@ -46,7 +48,7 @@ jobs:
           if ! git diff --staged --quiet; then
             git commit -m "🚀 Deploy from GitHub Actions: ${{ github.sha }}"
             
-            # Push using standard URL (credential helper handles auth)
+            # Push using standard URL
             git push
           else
             echo "No changes to deploy"
