@@ -10,12 +10,33 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Deploy to HuggingFace Spaces
-        uses: JacobLinCool/huggingface-spaces-action@v0.1.0
+      - uses: actions/checkout@v4
         with:
-          space: ${{ secrets.HF_SPACE_NAME }}  # e.g., "username/AI-BI-Copilot"
-          token: ${{ secrets.HF_TOKEN }}
-          directory: huggingface_space
+          fetch-depth: 0
+          lfs: true
+
+      - name: Push to hub
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_SPACE_NAME: ${{ secrets.HF_SPACE_NAME }}
+        run: |
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git config --global user.name "github-actions[bot]"
+          
+          # Clone the HF space
+          git clone https://user:$HF_TOKEN@huggingface.co/spaces/$HF_SPACE_NAME space_repo
+          cd space_repo
+          
+          # Copy files from our repo's huggingface_space folder to the space repo
+          # We use rsync to sync, excluding .git
+          rsync -av --delete --exclude='.git' ../huggingface_space/ .
+          
+          # Commit and push
+          git add .
+          # Only commit if there are changes
+          if ! git diff --staged --quiet; then
+            git commit -m "🚀 Deploy from GitHub Actions: ${{ github.sha }}"
+            git push
+          else
+            echo "No changes to deploy"
+          fi
